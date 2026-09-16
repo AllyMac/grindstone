@@ -4,11 +4,11 @@
   "manifest_version": 1,
   "author": "Alistair Macrae",
   "description": "D&D 5e combat automation for a home group: stat blocks, weapon attacks, and AoE spells.",
-  "icon": "./icon.svg",
+  "icon": "/icon.svg",
   "action": {
     "title": "Grindstone",
-    "icon": "./icon.svg",
-    "popover": "./",
+    "icon": "/icon.svg",
+    "popover": "/",
     "width": 400,
     "height": 600
   }
