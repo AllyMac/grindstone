@@ -6,4 +6,10 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   base: './',
+  server: {
+    // OBR loads the manifest and iframe content from its own origin
+    // (https://www.owlbear.rodeo), so the dev server must allow
+    // cross-origin fetches — otherwise "Failed to fetch" in the room.
+    cors: true,
+  },
 })
