@@ -45,18 +45,22 @@ function toFormValues(character: PlayerCharacter | NpcStatBlock): CharacterFormV
   }
 }
 
-async function handleSubmit(values: CharacterFormValues) {
+function handleSubmit(values: CharacterFormValues) {
+  // Don't wait on the room-metadata round trip to close the form - the
+  // store already applies the change to local state synchronously, so
+  // waiting here just leaves the form open (and inviting a double
+  // submit) for as long as the network write takes.
   if (mode.value.kind === 'create') {
     if (activeTab.value === 'players') {
-      await store.createPlayer(values)
+      void store.createPlayer(values)
     } else {
-      await store.createNpc(values)
+      void store.createNpc(values)
     }
   } else if (mode.value.kind === 'edit') {
     if (activeTab.value === 'players') {
-      await store.updatePlayer(mode.value.id, values)
+      void store.updatePlayer(mode.value.id, values)
     } else {
-      await store.updateNpc(mode.value.id, values)
+      void store.updateNpc(mode.value.id, values)
     }
   }
   mode.value = { kind: 'list' }
