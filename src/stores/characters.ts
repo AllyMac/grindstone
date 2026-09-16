@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { db, replaceTable } from '../lib/db'
 import { getRoomList, onRoomListChange, setRoomList } from '../lib/obr/roomList'
-import type { AbilityScores, NpcStatBlock, PlayerCharacter } from '../types/character'
+import type { AbilityScores, NpcStatBlock, PlayerCharacter, TokenImage } from '../types/character'
 
 const PLAYERS_KEY = 'grindstone/players'
 const NPCS_KEY = 'grindstone/npcs'
@@ -14,6 +14,7 @@ export interface NewCharacterInput {
   maxHp: number
   abilities: AbilityScores
   proficiencyBonus: number
+  tokenImage?: TokenImage
 }
 
 export const useCharactersStore = defineStore('characters', () => {
@@ -86,6 +87,7 @@ export const useCharactersStore = defineStore('characters', () => {
       proficiencyBonus: input.proficiencyBonus,
       weaponIds: [],
       spellsKnown: [],
+      tokenImage: input.tokenImage,
     }
   }
 

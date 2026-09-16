@@ -1,5 +1,6 @@
-import OBR, { buildImage, type ImageContent, type ImageGrid, type Vector2 } from '@owlbear-rodeo/sdk'
+import OBR, { buildImage, type Vector2 } from '@owlbear-rodeo/sdk'
 import { ref } from 'vue'
+import type { TokenImage } from '../../types/character'
 
 const TOOL_ID = 'rodeo.owlbear.grindstone/place-tool'
 const MODE_ID = 'rodeo.owlbear.grindstone/place-mode'
@@ -19,8 +20,7 @@ export const placingCharacterName = ref<string>()
 interface PendingPlacement {
   name: string
   statBlockId: string
-  image: ImageContent
-  grid: ImageGrid
+  tokenImage: TokenImage
 }
 
 let registered: Promise<void> | undefined
@@ -37,7 +37,7 @@ function formatError(err: unknown): string {
 }
 
 async function placeToken(placement: PendingPlacement, position: Vector2) {
-  const item = buildImage(placement.image, placement.grid)
+  const item = buildImage(placement.tokenImage.image, placement.tokenImage.grid)
     .position(position)
     .name(placement.name)
     .plainText(placement.name)
@@ -75,24 +75,17 @@ async function register() {
   })
 }
 
-export async function beginPlacement(name: string, statBlockId: string) {
+export async function beginPlacement(name: string, statBlockId: string, tokenImage: TokenImage) {
   if (!OBR.isAvailable) {
     alert('Grindstone is not running inside Owlbear Rodeo, so there is no map to place on.')
     return
   }
   try {
-    // Opens Owlbear's own asset picker (the same library used for map
-    // tokens) so the GM/player chooses real art instead of a generic
-    // placeholder - cancelling it (empty result) aborts placement
-    // entirely, before the map-click tool ever arms.
-    const [picked] = await OBR.assets.downloadImages(false, name, 'CHARACTER')
-    if (!picked) return
-
     if (!registered) registered = register()
     await registered
 
     previousToolId = await OBR.tool.getActiveTool()
-    pending = { name, statBlockId, image: picked.image, grid: picked.grid }
+    pending = { name, statBlockId, tokenImage }
     placingCharacterName.value = name
     await OBR.tool.activateTool(TOOL_ID)
   } catch (err) {

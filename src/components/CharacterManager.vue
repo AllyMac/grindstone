@@ -54,6 +54,7 @@ function toFormValues(character: PlayerCharacter | NpcStatBlock): CharacterFormV
     proficiencyBonus: character.proficiencyBonus,
     abilities: character.abilities,
     isTemplate: isNpc(character) ? character.isTemplate : false,
+    tokenImage: character.tokenImage,
   }
 }
 
@@ -109,16 +110,21 @@ async function handleClearEncounter() {
 }
 
 async function handlePlace(character: PlayerCharacter | NpcStatBlock) {
+  if (!character.tokenImage) {
+    alert('Set a token image for this character first (Edit → Token image) before placing it on the map.')
+    return
+  }
+
   // Placing a template duplicates it into its own encounter copy first
   // (same as "+ Encounter") - the token links to that copy, never the
-  // template itself.
+  // template itself. The copy inherits the template's tokenImage as-is.
   if (isNpc(character) && character.isTemplate) {
     const copy = await store.spawnEncounterCopy(character.id)
     if (!copy) return
     mode.value = { kind: 'view', id: copy.id }
-    await beginPlacement(copy.name, copy.id)
+    await beginPlacement(copy.name, copy.id, copy.tokenImage!)
   } else {
-    await beginPlacement(character.name, character.id)
+    await beginPlacement(character.name, character.id, character.tokenImage)
   }
 }
 

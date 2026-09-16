@@ -179,7 +179,17 @@ interface CharacterBase {
   proficiencyBonus: number;
   weaponIds: string[]; // references into the shared Armory, not embedded Weapon objects
   spellsKnown: string[]; // references into the shared Spellbook (Phase 4+)
-  imageUrl?: string;
+  // Picked once from OBR's own asset library (OBR.assets.downloadImages)
+  // when the character is created/edited, not re-prompted at placement
+  // time. Needs the image's own grid/dpi alongside its url - a bare URL
+  // string isn't enough to place a token that matches how the art would
+  // normally look placed in OBR, and addItems rejects generated data
+  // URIs outright (2048-char cap on image.url, and they don't render -
+  // OBR fetches image.url over the network rather than reading it inline).
+  tokenImage?: {
+    image: { url: string; mime: string; width: number; height: number };
+    grid: { offset: { x: number; y: number }; dpi: number };
+  };
 }
 
 // One entry per player, full stop — their sheet and their instance.

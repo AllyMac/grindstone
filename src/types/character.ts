@@ -1,3 +1,5 @@
+import type { ImageContent, ImageGrid } from '@owlbear-rodeo/sdk'
+
 export interface AbilityScores {
   str: number
   dex: number
@@ -5,6 +7,15 @@ export interface AbilityScores {
   int: number
   wis: number
   cha: number
+}
+
+// Picked once from OBR's own asset library at creation time (see
+// CharacterForm) rather than re-prompted on every placement. Needs more
+// than a bare URL - addItems needs the image's own grid/dpi to place a
+// token that matches how it'd look placed normally in OBR.
+export interface TokenImage {
+  image: ImageContent
+  grid: ImageGrid
 }
 
 export interface CharacterBase {
@@ -17,7 +28,7 @@ export interface CharacterBase {
   proficiencyBonus: number
   weaponIds: string[]
   spellsKnown: string[]
-  imageUrl?: string
+  tokenImage?: TokenImage
 }
 
 export interface PlayerCharacter extends CharacterBase {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import OBR from '@owlbear-rodeo/sdk'
 import { reactive } from 'vue'
-import type { AbilityScores } from '../types/character'
+import type { AbilityScores, TokenImage } from '../types/character'
 import AbilityScoreGrid from './AbilityScoreGrid.vue'
 
 export interface CharacterFormValues {
@@ -10,6 +11,7 @@ export interface CharacterFormValues {
   proficiencyBonus: number
   abilities: AbilityScores
   isTemplate: boolean
+  tokenImage?: TokenImage
 }
 
 const props = defineProps<{
@@ -35,6 +37,20 @@ const form = reactive<CharacterFormValues>(
       },
 )
 
+async function chooseTokenImage() {
+  if (!OBR.isAvailable) {
+    alert("Token images come from Owlbear's asset library, which isn't available outside Owlbear Rodeo.")
+    return
+  }
+  try {
+    const [picked] = await OBR.assets.downloadImages(false, form.name, 'CHARACTER')
+    if (picked) form.tokenImage = { image: picked.image, grid: picked.grid }
+  } catch (err) {
+    console.error('Grindstone: failed to choose token image', err)
+    alert('Could not open the image picker.')
+  }
+}
+
 function submit() {
   if (!form.name.trim()) return
   emit('submit', { ...form, name: form.name.trim() })
@@ -47,6 +63,28 @@ function submit() {
       Name
       <input v-model="form.name" type="text" required class="rounded-md border border-stone-300 px-2 py-1" />
     </label>
+
+    <div class="flex flex-col gap-1 text-sm">
+      <span>Token image</span>
+      <div class="flex items-center gap-2">
+        <img
+          v-if="form.tokenImage"
+          :src="form.tokenImage.image.url"
+          alt=""
+          class="h-10 w-10 rounded-full border border-stone-300 object-cover"
+        />
+        <div v-else class="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-stone-300 text-xs text-stone-400">
+          ?
+        </div>
+        <button
+          type="button"
+          class="rounded-md border border-stone-300 px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100"
+          @click="chooseTokenImage"
+        >
+          {{ form.tokenImage ? 'Change' : 'Choose image…' }}
+        </button>
+      </div>
+    </div>
 
     <div class="grid grid-cols-3 gap-2">
       <label class="flex flex-col gap-1 text-sm">
