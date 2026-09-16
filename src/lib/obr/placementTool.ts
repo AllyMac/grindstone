@@ -33,7 +33,7 @@ function formatError(err: unknown): string {
 async function placeToken(name: string, statBlockId: string, position: Vector2) {
   const image = generateTokenImage(name)
   const item = buildImage(
-    { url: image.url, mime: 'image/png', width: image.width, height: image.height },
+    { url: image.url, mime: image.mime, width: image.width, height: image.height },
     { offset: { x: image.width / 2, y: image.height / 2 }, dpi: image.width },
   )
     .position(position)
