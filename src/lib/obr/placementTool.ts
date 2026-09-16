@@ -21,6 +21,15 @@ let registered: Promise<void> | undefined
 let pendingStatBlockId: string | undefined
 let previousToolId: string | undefined
 
+function formatError(err: unknown): string {
+  if (err instanceof Error) return err.message
+  try {
+    return JSON.stringify(err, null, 2)
+  } catch {
+    return String(err)
+  }
+}
+
 async function placeToken(name: string, statBlockId: string, position: Vector2) {
   const image = generateTokenImage(name)
   const item = buildImage(
@@ -56,7 +65,7 @@ async function register() {
         await placeToken(name, statBlockId, event.pointerPosition)
       } catch (err) {
         console.error('Grindstone: failed to place token', err)
-        alert(`Failed to place token: ${err instanceof Error ? err.message : String(err)}`)
+        alert(`Failed to place token: ${formatError(err)}`)
       } finally {
         if (previousToolId) await OBR.tool.activateTool(previousToolId)
       }
@@ -81,7 +90,7 @@ export async function beginPlacement(name: string, statBlockId: string) {
     pendingStatBlockId = undefined
     placingCharacterName.value = undefined
     console.error('Grindstone: failed to start placement', err)
-    alert(`Could not start placement: ${err instanceof Error ? err.message : String(err)}`)
+    alert(`Could not start placement: ${formatError(err)}`)
   }
 }
 
