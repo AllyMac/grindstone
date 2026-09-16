@@ -1,29 +1,38 @@
 <script setup lang="ts">
 import OBR from '@owlbear-rodeo/sdk'
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
+import CharacterManager from './components/CharacterManager.vue'
+import { useCharactersStore } from './stores/characters'
 
+const store = useCharactersStore()
 const connected = ref(false)
-const roomId = ref('')
-const playerRole = ref<'GM' | 'PLAYER' | ''>('')
+const isGm = ref(true)
 
-onMounted(() => {
-  if (!OBR.isAvailable) return
+onMounted(async () => {
+  await store.load()
 
-  OBR.onReady(async () => {
-    roomId.value = OBR.room.id
-    playerRole.value = await OBR.player.getRole()
-    connected.value = true
-  })
+  if (OBR.isAvailable) {
+    OBR.onReady(async () => {
+      isGm.value = (await OBR.player.getRole()) === 'GM'
+      connected.value = true
+    })
+  }
+})
+
+onUnmounted(() => {
+  store.dispose()
 })
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col items-center justify-center gap-2 bg-stone-50 p-4 text-center text-stone-700">
-    <h1 class="text-lg font-semibold">Grindstone</h1>
-    <p v-if="connected" class="text-sm">
-      Connected to room <span class="font-mono">{{ roomId }}</span> as {{ playerRole }}
-    </p>
-    <p v-else-if="OBR.isAvailable" class="text-sm text-stone-500">Waiting for Owlbear Rodeo…</p>
-    <p v-else class="text-sm text-stone-500">Not running inside Owlbear Rodeo.</p>
+  <div class="flex min-h-screen flex-col bg-stone-50 text-stone-700">
+    <header class="flex items-center justify-between border-b border-stone-200 px-3 py-2">
+      <h1 class="text-sm font-semibold">Grindstone</h1>
+      <span class="text-xs" :class="connected ? 'text-green-600' : 'text-stone-400'">
+        {{ connected ? (isGm ? 'GM' : 'Player') : OBR.isAvailable ? 'Connecting…' : 'Not in Owlbear Rodeo' }}
+      </span>
+    </header>
+
+    <CharacterManager :is-gm="isGm" />
   </div>
 </template>

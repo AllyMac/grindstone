@@ -1,11 +1,9 @@
 # Grindstone
 
 An [Owlbear Rodeo](https://www.owlbear.rodeo/) extension that automates D&D
-5e combat math for a home group — stat blocks, weapon attacks, and AoE
+5e combat math for a home group. Stat blocks, weapon attacks, and AoE
 spells with automatic targeting and roll resolution.
 
-See [CLAUDE.md](./CLAUDE.md) for the full project spec, architecture, and
-roadmap.
 
 ## Development
 
