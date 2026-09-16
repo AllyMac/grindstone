@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { beginPlacement } from '../lib/obr/placementTool'
 import { useCharactersStore } from '../stores/characters'
 import type { NpcStatBlock, PlayerCharacter } from '../types/character'
 import CharacterForm, { type CharacterFormValues } from './CharacterForm.vue'
@@ -106,6 +107,27 @@ async function handleClearEncounter() {
   if (!confirm('Delete all current encounter copies? Named NPCs and templates are unaffected.')) return
   await store.clearEncounter()
 }
+
+async function handlePlace(character: PlayerCharacter | NpcStatBlock) {
+  // Placing a template duplicates it into its own encounter copy first
+  // (same as "+ Encounter") - the token links to that copy, never the
+  // template itself.
+  if (isNpc(character) && character.isTemplate) {
+    const copy = await store.spawnEncounterCopy(character.id)
+    if (!copy) return
+    mode.value = { kind: 'view', id: copy.id }
+    await beginPlacement(copy.name, copy.id)
+  } else {
+    await beginPlacement(character.name, character.id)
+  }
+}
+
+function showCharacter(kind: 'players' | 'npcs', id: string) {
+  activeTab.value = kind
+  mode.value = { kind: 'view', id }
+}
+
+defineExpose({ showCharacter })
 </script>
 
 <template>
@@ -158,7 +180,16 @@ async function handleClearEncounter() {
           </button>
         </div>
       </div>
-      <h2 class="text-lg font-semibold">{{ viewingCharacter.name }}</h2>
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold">{{ viewingCharacter.name }}</h2>
+        <button
+          type="button"
+          class="rounded-md border border-stone-300 px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100"
+          @click="handlePlace(viewingCharacter!)"
+        >
+          Place on map
+        </button>
+      </div>
       <CharacterSheet
         :character="viewingCharacter"
         :editable-hp="props.isGm"
