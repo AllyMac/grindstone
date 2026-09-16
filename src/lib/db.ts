@@ -19,8 +19,12 @@ class GrindstoneDb extends Dexie {
 export const db = new GrindstoneDb()
 
 export async function replaceTable<T extends { id: string }>(table: Table<T, string>, records: T[]) {
+  // IndexedDB uses the same structured-clone algorithm as postMessage, so
+  // it hits the same "reactive Proxy can't be cloned" problem when
+  // records come straight out of a Pinia store - see roomList.ts.
+  const plain = JSON.parse(JSON.stringify(records)) as T[]
   await db.transaction('rw', table, async () => {
     await table.clear()
-    await table.bulkPut(records)
+    await table.bulkPut(plain)
   })
 }

@@ -2,7 +2,9 @@ import OBR from '@owlbear-rodeo/sdk'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { db, replaceTable } from '../lib/db'
+import { syncHpIndicator } from '../lib/obr/hpIndicators'
 import { getRoomList, onRoomListChange, setRoomList } from '../lib/obr/roomList'
+import { deleteTokensForStatBlockIds } from '../lib/obr/tokens'
 import type { AbilityScores, NpcStatBlock, PlayerCharacter, TokenImage } from '../types/character'
 
 const PLAYERS_KEY = 'grindstone/players'
@@ -49,12 +51,20 @@ export const useCharactersStore = defineStore('characters', () => {
 
     await new Promise<void>((resolve) => OBR.onReady(() => resolve()))
 
-    const [roomPlayers, roomNpcs] = await Promise.all([
-      getRoomList<PlayerCharacter>(PLAYERS_KEY),
-      getRoomList<NpcStatBlock>(NPCS_KEY),
-    ])
-    applyPlayers(roomPlayers)
-    applyNpcs(roomNpcs)
+    try {
+      const [roomPlayers, roomNpcs] = await Promise.all([
+        getRoomList<PlayerCharacter>(PLAYERS_KEY),
+        getRoomList<NpcStatBlock>(NPCS_KEY),
+      ])
+      applyPlayers(roomPlayers)
+      applyNpcs(roomNpcs)
+    } catch (err) {
+      // Leave the cached values in place rather than wiping the UI to
+      // empty over a fetch failure - room metadata is still the source
+      // of truth, but only once we've actually managed to read it.
+      console.error('Grindstone: failed to load room metadata, keeping cached data', err)
+      alert(`Failed to load from Owlbear Rodeo - showing locally cached data instead: ${formatError(err)}`)
+    }
     ready.value = true
 
     unsubPlayers = onRoomListChange<PlayerCharacter>(PLAYERS_KEY, applyPlayers)
@@ -66,14 +76,33 @@ export const useCharactersStore = defineStore('characters', () => {
     unsubNpcs?.()
   }
 
+  function formatError(err: unknown): string {
+    if (err instanceof Error) return err.message
+    try {
+      return JSON.stringify(err, null, 2)
+    } catch {
+      return String(err)
+    }
+  }
+
   async function savePlayers(next: PlayerCharacter[]) {
     applyPlayers(next)
-    await setRoomList(PLAYERS_KEY, next)
+    try {
+      await setRoomList(PLAYERS_KEY, next)
+    } catch (err) {
+      console.error('Grindstone: failed to save players to room metadata', err)
+      alert(`Failed to save to Owlbear Rodeo - your changes are only local for now and may not survive a refresh: ${formatError(err)}`)
+    }
   }
 
   async function saveNpcs(next: NpcStatBlock[]) {
     applyNpcs(next)
-    await setRoomList(NPCS_KEY, next)
+    try {
+      await setRoomList(NPCS_KEY, next)
+    } catch (err) {
+      console.error('Grindstone: failed to save NPCs to room metadata', err)
+      alert(`Failed to save to Owlbear Rodeo - your changes are only local for now and may not survive a refresh: ${formatError(err)}`)
+    }
   }
 
   function baseCharacter(input: NewCharacterInput) {
@@ -108,19 +137,41 @@ export const useCharactersStore = defineStore('characters', () => {
   }
 
   async function updatePlayer(id: string, patch: Partial<PlayerCharacter>) {
-    await savePlayers(players.value.map((p) => (p.id === id ? { ...p, ...patch, id } : p)))
+    let updated: PlayerCharacter | undefined
+    await savePlayers(
+      players.value.map((p) => {
+        if (p.id !== id) return p
+        updated = { ...p, ...patch, id }
+        return updated
+      }),
+    )
+    if (updated && ('currentHp' in patch || 'maxHp' in patch)) {
+      void syncHpIndicator(id, updated.currentHp, updated.maxHp)
+    }
   }
 
   async function updateNpc(id: string, patch: Partial<NpcStatBlock>) {
-    await saveNpcs(npcs.value.map((n) => (n.id === id ? { ...n, ...patch, id } : n)))
+    let updated: NpcStatBlock | undefined
+    await saveNpcs(
+      npcs.value.map((n) => {
+        if (n.id !== id) return n
+        updated = { ...n, ...patch, id }
+        return updated
+      }),
+    )
+    if (updated && ('currentHp' in patch || 'maxHp' in patch)) {
+      void syncHpIndicator(id, updated.currentHp, updated.maxHp)
+    }
   }
 
   async function deletePlayer(id: string) {
     await savePlayers(players.value.filter((p) => p.id !== id))
+    await deleteTokensForStatBlockIds([id])
   }
 
   async function deleteNpc(id: string) {
     await saveNpcs(npcs.value.filter((n) => n.id !== id))
+    await deleteTokensForStatBlockIds([id])
   }
 
   // "Goblin" -> "Goblin 2" -> "Goblin 3" ... counted against currently
@@ -152,7 +203,9 @@ export const useCharactersStore = defineStore('characters', () => {
   }
 
   async function clearEncounter() {
+    const encounterCopyIds = npcs.value.filter((n) => n.isEncounterCopy).map((n) => n.id)
     await saveNpcs(npcs.value.filter((n) => !n.isEncounterCopy))
+    await deleteTokensForStatBlockIds(encounterCopyIds)
   }
 
   // Players and non-copy NPCs (templates + named NPCs) share one namespace,

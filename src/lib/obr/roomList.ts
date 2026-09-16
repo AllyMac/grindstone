@@ -9,7 +9,11 @@ export async function getRoomList<T>(key: string): Promise<T[]> {
 }
 
 export async function setRoomList<T>(key: string, value: T[]): Promise<void> {
-  await OBR.room.setMetadata({ [key]: value })
+  // Callers pass data straight out of a Pinia store, which wraps every
+  // nested object in a reactive Proxy on read - postMessage's structured
+  // clone algorithm can't serialize those ("#<Object> could not be
+  // cloned"), so this strips reactivity before it ever reaches the SDK.
+  await OBR.room.setMetadata({ [key]: JSON.parse(JSON.stringify(value)) })
 }
 
 export function onRoomListChange<T>(key: string, callback: (value: T[]) => void): () => void {
