@@ -15,6 +15,7 @@ export interface CharacterFormValues {
 const props = defineProps<{
   kind: 'player' | 'npc'
   initial?: CharacterFormValues
+  errorMessage?: string
 }>()
 const emit = defineEmits<{
   submit: [CharacterFormValues]
@@ -75,6 +76,10 @@ function submit() {
         between appearances, like a player character. Picking wrong is awkward to unwind later.
       </span>
     </label>
+
+    <p v-if="errorMessage" class="rounded-md border border-red-300 bg-red-50 px-2 py-1.5 text-sm text-red-700">
+      {{ errorMessage }}
+    </p>
 
     <div class="flex justify-end gap-2 pt-2">
       <button type="button" class="rounded-md px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-100" @click="emit('cancel')">

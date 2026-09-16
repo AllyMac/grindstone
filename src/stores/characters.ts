@@ -153,6 +153,17 @@ export const useCharactersStore = defineStore('characters', () => {
     await saveNpcs(npcs.value.filter((n) => !n.isEncounterCopy))
   }
 
+  // Players and non-copy NPCs (templates + named NPCs) share one namespace,
+  // so target lists and token placement never have to disambiguate two
+  // "Aragorn"s. Encounter copies are exempt - nextEncounterName() already
+  // keeps those unique among themselves, and a copy is meant to share its
+  // template's base name.
+  function nameConflict(name: string, excludeId?: string): boolean {
+    const target = name.trim().toLowerCase()
+    const pool: { id: string; name: string }[] = [...players.value, ...npcs.value.filter((n) => !n.isEncounterCopy)]
+    return pool.some((c) => c.id !== excludeId && c.name.trim().toLowerCase() === target)
+  }
+
   return {
     players,
     npcs,
@@ -167,5 +178,6 @@ export const useCharactersStore = defineStore('characters', () => {
     deleteNpc,
     spawnEncounterCopy,
     clearEncounter,
+    nameConflict,
   }
 })

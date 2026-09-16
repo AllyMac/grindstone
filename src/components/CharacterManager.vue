@@ -14,6 +14,17 @@ const search = ref('')
 
 type Mode = { kind: 'list' } | { kind: 'create' } | { kind: 'edit'; id: string } | { kind: 'view'; id: string }
 const mode = ref<Mode>({ kind: 'list' })
+const formError = ref<string>()
+
+function openCreate() {
+  formError.value = undefined
+  mode.value = { kind: 'create' }
+}
+
+function openEdit(id: string) {
+  formError.value = undefined
+  mode.value = { kind: 'edit', id }
+}
 
 function matches(name: string) {
   return name.toLowerCase().includes(search.value.trim().toLowerCase())
@@ -46,6 +57,13 @@ function toFormValues(character: PlayerCharacter | NpcStatBlock): CharacterFormV
 }
 
 function handleSubmit(values: CharacterFormValues) {
+  const excludeId = mode.value.kind === 'edit' ? mode.value.id : undefined
+  if (store.nameConflict(values.name, excludeId)) {
+    formError.value = `"${values.name}" is already in use by another player or NPC.`
+    return
+  }
+  formError.value = undefined
+
   // Don't wait on the room-metadata round trip to close the form - the
   // store already applies the change to local state synchronously, so
   // waiting here just leaves the form open (and inviting a double
@@ -118,6 +136,7 @@ async function handleClearEncounter() {
       <CharacterForm
         :kind="activeTab === 'players' ? 'player' : 'npc'"
         :initial="editingCharacter ? toFormValues(editingCharacter) : undefined"
+        :error-message="formError"
         @submit="handleSubmit"
         @cancel="mode = { kind: 'list' }"
       />
@@ -127,7 +146,7 @@ async function handleClearEncounter() {
       <div class="flex items-center justify-between">
         <button type="button" class="text-sm text-stone-500 hover:underline" @click="mode = { kind: 'list' }">← Back</button>
         <div class="flex gap-2" v-if="props.isGm">
-          <button type="button" class="text-sm text-stone-600 hover:underline" @click="mode = { kind: 'edit', id: viewingCharacter!.id }">
+          <button type="button" class="text-sm text-stone-600 hover:underline" @click="openEdit(viewingCharacter!.id)">
             Edit
           </button>
           <button
@@ -159,7 +178,7 @@ async function handleClearEncounter() {
           v-if="props.isGm"
           type="button"
           class="rounded-md bg-stone-700 px-3 py-1 text-sm font-medium text-white hover:bg-stone-800"
-          @click="mode = { kind: 'create' }"
+          @click="openCreate"
         >
           + New
         </button>
