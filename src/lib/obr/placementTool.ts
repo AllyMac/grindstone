@@ -1,6 +1,5 @@
 import OBR, { buildImage, type Vector2 } from '@owlbear-rodeo/sdk'
 import { ref } from 'vue'
-import { generateTokenImage } from '../tokenImage'
 
 const TOOL_ID = 'rodeo.owlbear.grindstone/place-tool'
 const MODE_ID = 'rodeo.owlbear.grindstone/place-mode'
@@ -11,6 +10,16 @@ const MODE_ID = 'rodeo.owlbear.grindstone/place-mode'
 // against the origin instead (see the manifest.json history for why
 // that one needs full absolute URLs generated at deploy time instead).
 const iconUrl = new URL('icon.svg', document.baseURI).href
+
+// Placeholder token art until per-character image upload exists
+// (CharacterBase.imageUrl is reserved for that). addItems validates
+// image.url against a real, network-fetchable resource under 2048
+// characters - a generated data URI fails both the length cap for
+// anything non-trivial AND doesn't actually render (OBR's scene
+// renderer loads it over the network, not inline), so this reuses our
+// own hosted icon and relies on the item's text label for
+// distinguishing characters instead of per-character art.
+const TOKEN_SIZE = 48
 
 // Exposed so the UI can show "click the map to place <name>" - there's
 // no other feedback once the tool is armed, since the click itself
@@ -31,13 +40,13 @@ function formatError(err: unknown): string {
 }
 
 async function placeToken(name: string, statBlockId: string, position: Vector2) {
-  const image = generateTokenImage(name)
   const item = buildImage(
-    { url: image.url, mime: image.mime, width: image.width, height: image.height },
-    { offset: { x: image.width / 2, y: image.height / 2 }, dpi: image.width },
+    { url: iconUrl, mime: 'image/svg+xml', width: TOKEN_SIZE, height: TOKEN_SIZE },
+    { offset: { x: TOKEN_SIZE / 2, y: TOKEN_SIZE / 2 }, dpi: TOKEN_SIZE },
   )
     .position(position)
     .name(name)
+    .plainText(name)
     .layer('CHARACTER')
     .metadata({ 'grindstone/statBlockId': statBlockId })
     .build()
