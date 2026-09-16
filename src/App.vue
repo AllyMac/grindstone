@@ -2,6 +2,7 @@
 import OBR from '@owlbear-rodeo/sdk'
 import { onMounted, onUnmounted, ref } from 'vue'
 import CharacterManager from './components/CharacterManager.vue'
+import { cancelPlacement, placingCharacterName } from './lib/obr/placementTool'
 import { onSelectedStatBlockChange } from './lib/obr/selection'
 import { useCharactersStore } from './stores/characters'
 
@@ -49,6 +50,13 @@ onUnmounted(() => {
         {{ connected ? (isGm ? 'GM' : 'Player') : OBR.isAvailable ? 'Connecting…' : 'Not in Owlbear Rodeo' }}
       </span>
     </header>
+
+    <div v-if="placingCharacterName" class="flex items-center justify-between gap-2 bg-amber-100 px-3 py-2 text-xs text-amber-900">
+      <span>Click the map to place <strong>{{ placingCharacterName }}</strong></span>
+      <button type="button" class="rounded border border-amber-400 px-2 py-0.5 font-medium hover:bg-amber-200" @click="cancelPlacement">
+        Cancel
+      </button>
+    </div>
 
     <CharacterManager ref="manager" :is-gm="isGm" />
   </div>
