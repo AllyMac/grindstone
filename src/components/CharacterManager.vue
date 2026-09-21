@@ -3,6 +3,7 @@ import OBR from '@owlbear-rodeo/sdk'
 import { imagePickerMessage } from '../lib/obr/pickerError'
 import { computed, ref, watch } from 'vue'
 import { beginPlacement, beginRepeatedPlacement, unplacedStatBlockId } from '../lib/obr/placementTool'
+import { proficiencyForLevel } from '../lib/dnd'
 import { canEditCharacter } from '../lib/permissions'
 import { useCharactersStore } from '../stores/characters'
 import type { NpcStatBlock, PlayerCharacter } from '../types/character'
@@ -12,6 +13,7 @@ import CharacterPicker from './CharacterPicker.vue'
 import CharacterRow from './CharacterRow.vue'
 import CharacterSheet from './CharacterSheet.vue'
 import OwnerLink from './OwnerLink.vue'
+import PlayerSheet from './sheet/PlayerSheet.vue'
 
 const props = defineProps<{ isGm: boolean; playerId?: string }>()
 
@@ -114,6 +116,14 @@ function toFormValues(character: PlayerCharacter | NpcStatBlock): CharacterFormV
     abilities: character.abilities,
     isTemplate: isNpc(character) ? character.isTemplate : false,
     tokenImage: character.tokenImage,
+    ...(isNpc(character)
+      ? {}
+      : {
+          level: character.level,
+          className: character.className,
+          hitDie: character.hitDie,
+          speed: character.speed,
+        }),
   }
 }
 
@@ -130,16 +140,22 @@ function handleSubmit(values: CharacterFormValues) {
   // store already applies the change to local state synchronously, so
   // waiting here just leaves the form open (and inviting a double
   // submit) for as long as the network write takes.
+  // isTemplate is NPC-only: leaking it onto a PC would make it look like an
+  // NPC (the two are told apart by that field's presence). A PC's
+  // proficiency follows from their level.
+  const { isTemplate: _isTemplate, ...pcValues } = values
+  if (pcValues.level) pcValues.proficiencyBonus = proficiencyForLevel(pcValues.level)
+
   if (current.kind === 'create') {
     if (activeTab.value === 'players') {
       // A player creating a character is creating their own.
-      void store.createPlayer(values, props.isGm ? undefined : props.playerId)
+      void store.createPlayer(pcValues, props.isGm ? undefined : props.playerId)
     } else {
       void store.createNpc(values)
     }
   } else if (current.kind === 'edit') {
     if (activeTab.value === 'players') {
-      void store.updatePlayer(current.id, values)
+      void store.updatePlayer(current.id, pcValues)
     } else {
       void store.updateNpc(current.id, values)
     }
@@ -237,11 +253,11 @@ defineExpose({ showCharacter })
 
 <template>
   <div class="flex flex-col gap-3 p-3">
-    <div v-if="props.isGm" class="flex rounded-md bg-stone-100 p-1 text-sm">
+    <div v-if="props.isGm" class="flex rounded-md bg-hover p-1 text-sm">
       <button
         type="button"
         class="flex-1 rounded px-2 py-1 font-medium"
-        :class="activeTab === 'players' ? 'bg-white shadow-sm' : 'text-stone-500'"
+        :class="activeTab === 'players' ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-hover'"
         @click="activeTab = 'players'; mode = { kind: 'list' }"
       >
         PCs
@@ -249,7 +265,7 @@ defineExpose({ showCharacter })
       <button
         type="button"
         class="flex-1 rounded px-2 py-1 font-medium"
-        :class="activeTab === 'npcs' ? 'bg-white shadow-sm' : 'text-stone-500'"
+        :class="activeTab === 'npcs' ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-hover'"
         @click="activeTab = 'npcs'; mode = { kind: 'list' }"
       >
         NPCs
@@ -257,7 +273,7 @@ defineExpose({ showCharacter })
     </div>
 
     <template v-if="view.kind === 'create' || view.kind === 'edit'">
-      <h2 class="text-sm font-semibold text-stone-700">
+      <h2 class="text-sm font-semibold text-fg">
         {{ view.kind === 'create' ? 'New' : 'Edit' }} {{ activeTab === 'players' ? 'PC' : 'NPC' }}
       </h2>
       <CharacterForm
@@ -273,15 +289,15 @@ defineExpose({ showCharacter })
 
     <template v-else-if="view.kind === 'view' && viewingCharacter">
       <div class="flex items-center justify-between">
-        <button v-if="props.isGm" type="button" class="text-sm text-stone-500 hover:underline" @click="mode = { kind: 'list' }">← Back</button>
-        <button v-else type="button" class="text-sm text-stone-500 hover:underline" @click="mode = { kind: 'choose' }">
+        <button v-if="props.isGm" type="button" class="text-sm text-muted hover:underline" @click="mode = { kind: 'list' }">← Back</button>
+        <button v-else type="button" class="text-sm text-muted hover:underline" @click="mode = { kind: 'choose' }">
           Switch PC
         </button>
         <div class="flex gap-2">
           <button
             v-if="canEdit(viewingCharacter)"
             type="button"
-            class="text-sm text-stone-600 hover:underline"
+            class="text-sm text-fg hover:underline"
             @click="openEdit(viewingCharacter!.id)"
           >
             Edit
@@ -289,7 +305,7 @@ defineExpose({ showCharacter })
           <button
             v-if="props.isGm"
             type="button"
-            class="text-sm text-red-600 hover:underline"
+            class="text-sm text-danger hover:underline"
             @click="handleDelete(viewingCharacter!.id, activeTab)"
           >
             Delete
@@ -309,11 +325,11 @@ defineExpose({ showCharacter })
               v-if="viewingCharacter.tokenImage"
               :src="viewingCharacter.tokenImage.image.url"
               alt=""
-              class="h-10 w-10 rounded-full border border-stone-300 object-cover"
+              class="h-10 w-10 rounded-full border border-line object-cover"
             />
             <div
               v-else
-              class="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-stone-300 text-xs text-stone-300"
+              class="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-line text-xs text-faint"
             >
               ?
             </div>
@@ -328,11 +344,11 @@ defineExpose({ showCharacter })
               v-if="viewingCharacter.tokenImage"
               :src="viewingCharacter.tokenImage.image.url"
               alt=""
-              class="h-10 w-10 shrink-0 rounded-full border border-stone-300 object-cover"
+              class="h-10 w-10 shrink-0 rounded-full border border-line object-cover"
             />
             <div
               v-else
-              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-dashed border-stone-300 text-xs text-stone-300"
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-dashed border-line text-xs text-faint"
             >
               ?
             </div>
@@ -341,16 +357,24 @@ defineExpose({ showCharacter })
         </div>
         <button
           type="button"
-          class="rounded-md border border-stone-300 px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100"
+          class="rounded-md border border-line px-2 py-1 text-xs font-medium text-fg hover:bg-hover"
           @click="handlePlace(viewingCharacter!)"
         >
           Place on map
         </button>
       </div>
       <CharacterSheet
+        v-if="isNpc(viewingCharacter)"
         :character="viewingCharacter"
         :editable-hp="canEdit(viewingCharacter)"
         @update-hp="(hp) => handleUpdateHp(viewingCharacter!.id, activeTab, hp)"
+      />
+      <PlayerSheet
+        v-else
+        :character="viewingCharacter"
+        :editable="canEdit(viewingCharacter)"
+        @patch="(patch) => store.updatePlayer(viewingCharacter!.id, patch)"
+        @update-hp="(hp) => handleUpdateHp(viewingCharacter!.id, 'players', hp)"
       />
       <OwnerLink v-if="props.isGm && activeTab === 'players'" :character="viewingCharacter as PlayerCharacter" />
     </template>
@@ -370,12 +394,12 @@ defineExpose({ showCharacter })
           v-model="search"
           type="search"
           placeholder="Search..."
-          class="flex-1 rounded-md border border-stone-300 px-2 py-1 text-sm"
+          class="flex-1 rounded-md border border-line px-2 py-1 text-sm"
         />
         <button
           v-if="props.isGm"
           type="button"
-          class="rounded-md bg-stone-700 px-3 py-1 text-sm font-medium text-white hover:bg-stone-800"
+          class="rounded-md bg-accent px-3 py-1 text-sm font-medium text-accent-fg hover:brightness-110"
           @click="openCreate"
         >
           + New
@@ -383,7 +407,7 @@ defineExpose({ showCharacter })
         <button
           v-if="props.isGm"
           type="button"
-          class="rounded-md border border-stone-300 px-2 py-1 text-sm text-stone-600 hover:bg-stone-100"
+          class="rounded-md border border-line px-2 py-1 text-sm text-fg hover:bg-hover"
           title="Export or import campaign.json"
           @click="mode = { kind: 'campaign' }"
         >
@@ -392,7 +416,7 @@ defineExpose({ showCharacter })
       </div>
 
       <template v-if="activeTab === 'players'">
-        <p v-if="filteredPlayers.length === 0" class="text-sm text-stone-400">No PCs yet.</p>
+        <p v-if="filteredPlayers.length === 0" class="text-sm text-faint">No PCs yet.</p>
         <ul class="flex flex-col gap-1">
           <li v-for="player in filteredPlayers" :key="player.id">
             <CharacterRow
@@ -408,8 +432,8 @@ defineExpose({ showCharacter })
 
       <template v-else>
         <div class="flex flex-col gap-1">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-stone-400">Roster</h3>
-          <p v-if="npcRoster.length === 0" class="text-sm text-stone-400">No NPCs yet.</p>
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-muted">Roster</h3>
+          <p v-if="npcRoster.length === 0" class="text-sm text-faint">No NPCs yet.</p>
           <ul class="flex flex-col gap-1">
             <li v-for="npc in npcRoster" :key="npc.id">
               <CharacterRow
@@ -427,17 +451,17 @@ defineExpose({ showCharacter })
 
         <div class="flex flex-col gap-1">
           <div class="flex items-center justify-between">
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-stone-400">Active encounter</h3>
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-muted">Active encounter</h3>
             <button
               v-if="props.isGm && activeEncounter.length > 0"
               type="button"
-              class="text-xs text-red-600 hover:underline"
+              class="text-xs text-danger hover:underline"
               @click="handleClearEncounter"
             >
               Clear encounter
             </button>
           </div>
-          <p v-if="activeEncounter.length === 0" class="text-sm text-stone-400">Nothing in the current encounter.</p>
+          <p v-if="activeEncounter.length === 0" class="text-sm text-faint">Nothing in the current encounter.</p>
           <ul class="flex flex-col gap-1">
             <li v-for="npc in activeEncounter" :key="npc.id">
               <CharacterRow

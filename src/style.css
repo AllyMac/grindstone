@@ -1,7 +1,45 @@
 @import "tailwindcss";
 
-/* Tailwind v4 no longer gives buttons a pointer cursor by default. */
+/* Colours come from Owlbear Rodeo's own theme (see src/lib/obr/theme.ts) so
+   the popover matches whatever the user has set. These are OBR's default
+   dark values, used until the theme arrives and outside OBR. */
+:root {
+  --gs-bg: #1e2231;
+  --gs-surface: #222639;
+  --gs-fg: #ffffff;
+  --gs-accent: #bb99ff;
+  --gs-accent-fg: #000000;
+  --gs-danger: #ff7a85;
+  --gs-success: #6fdc9f;
+  --gs-warn: #ffc25c;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --color-bg: var(--gs-bg);
+  --color-surface: var(--gs-surface);
+  --color-fg: var(--gs-fg);
+  /* Derived from the text colour rather than OBR's secondary/disabled
+     shades, which are too dim for small text on the panel. */
+  --color-muted: color-mix(in srgb, var(--gs-fg) 78%, transparent);
+  --color-faint: color-mix(in srgb, var(--gs-fg) 60%, transparent);
+  --color-accent: var(--gs-accent);
+  --color-accent-fg: var(--gs-accent-fg);
+  --color-danger: var(--gs-danger);
+  --color-success: var(--gs-success);
+  --color-warn: var(--gs-warn);
+  --color-line: color-mix(in srgb, var(--gs-fg) 16%, transparent);
+  --color-hover: color-mix(in srgb, var(--gs-fg) 8%, transparent);
+}
+
 @layer base {
+  body {
+    background: var(--gs-bg);
+    color: var(--gs-fg);
+  }
+
+  /* Tailwind v4 no longer gives buttons a pointer cursor by default. */
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   a[href],
@@ -12,5 +50,30 @@
 
   button:disabled {
     cursor: not-allowed;
+  }
+
+  /* OBR-style fields: filled, softly bordered, accent ring on focus. */
+  input:not([type="checkbox"]):not([type="file"]),
+  select,
+  textarea {
+    background: color-mix(in srgb, var(--gs-fg) 6%, transparent);
+    border: 1px solid var(--color-line);
+    color: var(--gs-fg);
+  }
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: 2px solid color-mix(in srgb, var(--gs-accent) 70%, transparent);
+    outline-offset: 0;
+  }
+  select option {
+    background: var(--gs-surface);
+    color: var(--gs-fg);
+  }
+  input[type="checkbox"] {
+    accent-color: var(--gs-accent);
+  }
+  ::placeholder {
+    color: var(--gs-faint);
   }
 }

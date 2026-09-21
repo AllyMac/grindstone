@@ -28,18 +28,18 @@ function formatModifier(score: number): string {
     <div
       v-for="key in abilityKeys"
       :key="key"
-      class="flex flex-col items-center rounded-md border border-stone-200 p-2"
+      class="flex flex-col items-center rounded-md border border-line p-2"
     >
-      <span class="text-xs font-semibold text-stone-500">{{ labels[key] }}</span>
+      <span class="text-xs font-semibold text-muted">{{ labels[key] }}</span>
       <input
         v-if="editable"
         type="number"
-        class="w-12 border-0 text-center text-lg font-semibold focus:outline-none"
+        class="w-full border-0 bg-transparent text-center text-lg font-semibold focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         :value="modelValue[key]"
         @input="emit('update:modelValue', { ...modelValue, [key]: Number(($event.target as HTMLInputElement).value) })"
       />
       <span v-else class="text-lg font-semibold">{{ modelValue[key] }}</span>
-      <span class="text-xs text-stone-500">{{ formatModifier(modelValue[key]) }}</span>
+      <span class="text-xs text-muted">{{ formatModifier(modelValue[key]) }}</span>
     </div>
   </div>
 </template>

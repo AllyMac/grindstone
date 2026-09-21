@@ -40,9 +40,20 @@ function mergeById<T extends { id: string }>(preferred: T[], fallback: T[]): T[]
   return [...preferred, ...fallback.filter((c) => !seen.has(c.id))]
 }
 
+// An older edit form leaked NPC-only fields onto PCs, and a PC is told from
+// an NPC by whether `isTemplate` exists - so scrub them on the way in.
+function cleanPlayer(player: PlayerCharacter): PlayerCharacter {
+  const { isTemplate: _t, isEncounterCopy: _e, ...rest } = player as PlayerCharacter & {
+    isTemplate?: boolean
+    isEncounterCopy?: boolean
+  }
+  return rest
+}
+
 export function readCharacters(metadata: Metadata): Characters {
+  const players = mergeById(withPrefix<PlayerCharacter>(metadata, PLAYER_PREFIX), list<PlayerCharacter>(metadata[LEGACY_PLAYERS_KEY]))
   return {
-    players: mergeById(withPrefix<PlayerCharacter>(metadata, PLAYER_PREFIX), list(metadata[LEGACY_PLAYERS_KEY])),
+    players: players.map(cleanPlayer),
     npcs: mergeById(withPrefix<NpcStatBlock>(metadata, ENCOUNTER_PREFIX), list<NpcStatBlock>(metadata[NPC_ROSTER_KEY])),
   }
 }

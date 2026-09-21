@@ -5,6 +5,7 @@ import CharacterManager from './components/CharacterManager.vue'
 import { reconcileHpIndicators, syncHpIndicator } from './lib/obr/hpIndicators'
 import { cancelPlacement, placingCharacterName, placingRepeats } from './lib/obr/placementTool'
 import { onSelectedStatBlockChange } from './lib/obr/selection'
+import { syncObrTheme } from './lib/obr/theme'
 import { useCharactersStore } from './stores/characters'
 
 const store = useCharactersStore()
@@ -20,6 +21,7 @@ const manager = ref<InstanceType<typeof CharacterManager>>()
 
 let unsubSelection: (() => void) | undefined
 let unsubSceneReady: (() => void) | undefined
+const stopTheme = syncObrTheme()
 
 // GM only: every connected client's popover runs this, and several of
 // them rewriting the same bars at once would just race each other.
@@ -86,26 +88,27 @@ onUnmounted(() => {
   store.dispose()
   unsubSelection?.()
   unsubSceneReady?.()
+  stopTheme()
 })
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-stone-50 text-stone-700">
-    <header class="flex items-center justify-between border-b border-stone-200 px-3 py-2">
+  <div class="flex min-h-screen flex-col bg-bg text-fg">
+    <header class="flex items-center justify-between border-b border-line px-3 py-2">
       <h1 class="text-sm font-semibold">Grindstone</h1>
-      <span class="text-xs" :class="connected ? 'text-green-600' : 'text-stone-400'">
+      <span class="text-xs" :class="connected ? 'text-success' : 'text-faint'">
         {{ connected ? (isGm ? 'GM' : 'Player') : OBR.isAvailable ? 'Connecting…' : 'Not in Owlbear Rodeo' }}
       </span>
     </header>
 
-    <div v-if="placingCharacterName" class="flex items-center justify-between gap-2 bg-amber-100 px-3 py-2 text-xs text-amber-900">
+    <div v-if="placingCharacterName" class="flex items-center justify-between gap-2 bg-warn/20 px-3 py-2 text-xs text-fg">
       <span>
         Click the map to place <strong>{{ placingCharacterName }}</strong>
         <template v-if="placingRepeats"> - keep clicking to add more</template>
       </span>
       <button
         type="button"
-        class="rounded border border-amber-400 px-3 py-1 font-semibold hover:bg-amber-200"
+        class="rounded border border-warn/40 px-3 py-1 font-semibold hover:bg-warn/30"
         @click="cancelPlacement"
       >
         {{ placingRepeats ? 'Done' : 'Cancel' }}

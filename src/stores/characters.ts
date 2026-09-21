@@ -21,6 +21,9 @@ export interface NewCharacterInput {
   tokenImage?: TokenImage
 }
 
+// Extra fields only PCs have (see the full character sheet).
+export type NewPlayerInput = NewCharacterInput & Pick<PlayerCharacter, 'level' | 'className' | 'hitDie' | 'speed'>
+
 export const useCharactersStore = defineStore('characters', () => {
   const players = ref<PlayerCharacter[]>([])
   const npcs = ref<NpcStatBlock[]>([])
@@ -139,8 +142,14 @@ export const useCharactersStore = defineStore('characters', () => {
 
   // With an ownerId (a player making their own character) the new sheet is
   // linked straight away, moving that player off any character they had.
-  async function createPlayer(input: NewCharacterInput, ownerId?: string) {
-    const character: PlayerCharacter = baseCharacter(input)
+  async function createPlayer(input: NewPlayerInput, ownerId?: string) {
+    const character: PlayerCharacter = {
+      ...baseCharacter(input),
+      level: input.level,
+      className: input.className,
+      hitDie: input.hitDie,
+      speed: input.speed,
+    }
     if (ownerId) character.ownerId = ownerId
     const others = ownerId
       ? players.value.map((p) => {

@@ -20,7 +20,7 @@ const emit = defineEmits<{
 
 <template>
   <div
-    class="flex items-center gap-1 rounded-md border border-stone-200 px-2 py-1.5 text-sm hover:bg-stone-50"
+    class="flex items-center gap-1 rounded-md border border-line px-2 py-1.5 text-sm hover:bg-hover"
     :class="{ 'opacity-40': awaitingPlacement }"
   >
     <button type="button" class="flex flex-1 items-center gap-2 text-left" @click="emit('view')">
@@ -28,25 +28,25 @@ const emit = defineEmits<{
         v-if="character.tokenImage"
         :src="character.tokenImage.image.url"
         alt=""
-        class="h-8 w-8 shrink-0 rounded-full border border-stone-300 object-cover"
+        class="h-8 w-8 shrink-0 rounded-full border border-line object-cover"
       />
       <div
         v-else
-        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-dashed border-stone-300 text-xs text-stone-300"
+        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-dashed border-line text-xs text-faint"
       >
         ?
       </div>
       <span class="min-w-0 flex-1 truncate">
-        {{ character.name }}<span v-if="isTemplate" class="ml-1 text-xs text-stone-400">(template)</span
-        ><span v-if="note" class="ml-1 text-xs text-stone-400">({{ note }})</span
+        {{ character.name }}<span v-if="isTemplate" class="ml-1 text-xs text-muted">(template)</span
+        ><span v-if="note" class="ml-1 text-xs text-muted">({{ note }})</span
         ><span v-if="awaitingPlacement" class="ml-1 text-xs italic">(click map to place)</span>
       </span>
-      <span class="shrink-0 text-xs text-stone-400">{{ character.currentHp }}/{{ character.maxHp }} HP</span>
+      <span class="shrink-0 text-xs text-muted">{{ character.currentHp }}/{{ character.maxHp }} HP</span>
     </button>
     <button
       v-if="showPlace"
       type="button"
-      class="shrink-0 rounded px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100"
+      class="shrink-0 rounded-md border border-line px-2 py-1 text-xs font-medium text-fg hover:bg-hover"
       @click="emit('place')"
     >
       Place
@@ -54,7 +54,7 @@ const emit = defineEmits<{
     <button
       v-if="showSpawnEncounter"
       type="button"
-      class="shrink-0 rounded px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100"
+      class="shrink-0 rounded-md border border-line px-2 py-1 text-xs font-medium text-fg hover:bg-hover"
       @click="emit('spawnEncounter')"
     >
       + Encounter

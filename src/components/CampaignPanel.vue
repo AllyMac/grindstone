@@ -104,46 +104,46 @@ function describe(c: ImportConflict['existing']) {
 <template>
   <div class="flex flex-col gap-3">
     <div class="flex items-center justify-between">
-      <h2 class="text-sm font-semibold text-stone-700">Backup &amp; restore</h2>
-      <button type="button" class="text-sm text-stone-500 hover:underline" @click="emit('close')">← Back</button>
+      <h2 class="text-sm font-semibold text-fg">Backup &amp; restore</h2>
+      <button type="button" class="text-sm text-muted hover:underline" @click="emit('close')">← Back</button>
     </div>
 
     <template v-if="stage.kind !== 'resolving'">
-      <div class="flex flex-col gap-1 rounded-md border border-stone-200 p-3 text-sm">
+      <div class="flex flex-col gap-1 rounded-md border border-line p-3 text-sm">
         <h3 class="font-medium">Export</h3>
-        <p class="text-xs text-stone-500">
+        <p class="text-xs text-muted">
           Saves every PC and NPC to a campaign.json file - a backup, or a way to move to another room.
         </p>
         <button
           type="button"
-          class="mt-1 self-start rounded-md bg-stone-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-stone-800"
+          class="mt-1 self-start rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-fg hover:brightness-110"
           @click="exportCampaign"
         >
           Export campaign.json
         </button>
       </div>
 
-      <div class="flex flex-col gap-1 rounded-md border border-stone-200 p-3 text-sm">
+      <div class="flex flex-col gap-1 rounded-md border border-line p-3 text-sm">
         <h3 class="font-medium">Import</h3>
-        <p class="text-xs text-stone-500">
+        <p class="text-xs text-muted">
           Anything new is added; if something clashes with what's already here, you'll be asked what to do.
         </p>
         <label
-          class="mt-1 cursor-pointer self-start rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100"
+          class="mt-1 cursor-pointer self-start rounded-md border border-line px-3 py-1.5 text-xs font-medium text-fg hover:bg-hover"
         >
           Choose campaign.json…
           <input type="file" accept=".json,application/json" class="hidden" @change="onFile" />
         </label>
       </div>
 
-      <p v-if="notice" class="rounded-md border border-green-300 bg-green-50 px-2 py-1.5 text-sm text-green-800">
+      <p v-if="notice" class="rounded-md border border-success/40 bg-success/15 px-2 py-1.5 text-sm text-success">
         {{ notice }}
       </p>
-      <p v-if="error" class="rounded-md border border-red-300 bg-red-50 px-2 py-1.5 text-sm text-red-700">
+      <p v-if="error" class="rounded-md border border-danger/40 bg-danger/15 px-2 py-1.5 text-sm text-danger">
         {{ error }}
       </p>
 
-      <div v-if="stage.kind === 'done'" class="rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800">
+      <div v-if="stage.kind === 'done'" class="rounded-md border border-success/40 bg-success/15 px-3 py-2 text-sm text-success">
         <p class="font-medium">Import finished</p>
         <ul class="list-inside list-disc text-xs">
           <li v-for="line in stage.summary" :key="line">{{ line }}</li>
@@ -152,7 +152,7 @@ function describe(c: ImportConflict['existing']) {
     </template>
 
     <template v-else-if="current">
-      <div class="flex items-center justify-between text-xs text-stone-500">
+      <div class="flex items-center justify-between text-xs text-muted">
         <span>Conflict {{ stage.index + 1 }} of {{ stage.plan.conflicts.length }}</span>
         <span class="uppercase">{{ current.kind === 'player' ? 'PC' : current.kind }}</span>
       </div>
@@ -168,29 +168,29 @@ function describe(c: ImportConflict['existing']) {
       </p>
 
       <div class="flex flex-col gap-1 text-xs">
-        <div class="rounded-md border border-stone-200 px-2 py-1.5"><span class="font-semibold">Current:</span> {{ describe(current.existing) }}</div>
-        <div class="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5"><span class="font-semibold">Imported:</span> {{ describe(current.imported) }}</div>
+        <div class="rounded-md border border-line px-2 py-1.5"><span class="font-semibold">Current:</span> {{ describe(current.existing) }}</div>
+        <div class="rounded-md border border-warn/40 bg-warn/15 px-2 py-1.5"><span class="font-semibold">Imported:</span> {{ describe(current.imported) }}</div>
       </div>
 
-      <label v-if="stage.index === 0 && stage.plan.conflicts.length > 1" class="flex items-center gap-2 text-xs text-stone-600">
+      <label v-if="stage.index === 0 && stage.plan.conflicts.length > 1" class="flex items-center gap-2 text-xs text-fg">
         <input v-model="applyToAll" type="checkbox" />
         Apply my choice to all {{ stage.plan.conflicts.length }} conflicts
       </label>
 
       <div class="flex flex-wrap gap-2">
-        <button type="button" class="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium hover:bg-stone-100" @click="choose('keep')">
+        <button type="button" class="rounded-md border border-line px-3 py-1.5 text-xs font-medium hover:bg-hover" @click="choose('keep')">
           Keep current
         </button>
         <button
           type="button"
-          class="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium hover:bg-stone-100 disabled:opacity-40"
+          class="rounded-md border border-line px-3 py-1.5 text-xs font-medium hover:bg-hover disabled:opacity-40"
           :disabled="!current.canOverwrite"
           :title="current.canOverwrite ? '' : 'The matching entry is in a different list, so it can\'t be replaced'"
           @click="choose('overwrite')"
         >
           Overwrite
         </button>
-        <button type="button" class="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium hover:bg-stone-100" @click="choose('new')">
+        <button type="button" class="rounded-md border border-line px-3 py-1.5 text-xs font-medium hover:bg-hover" @click="choose('new')">
           Import as new
         </button>
       </div>

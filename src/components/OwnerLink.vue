@@ -35,11 +35,11 @@ function onChange(event: Event) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-1 rounded-md border border-stone-200 p-2 text-sm">
-    <label class="text-xs text-stone-500" for="owner-link">Played by</label>
+  <div class="flex flex-col gap-1 rounded-md border border-line p-2 text-sm">
+    <label class="text-xs text-muted" for="owner-link">Played by</label>
     <select
       id="owner-link"
-      class="rounded-md border border-stone-300 bg-white px-2 py-1"
+      class="rounded-md border border-line bg-surface px-2 py-1"
       :value="character.ownerId ?? ''"
       :disabled="!OBR.isAvailable"
       @change="onChange"
@@ -50,8 +50,8 @@ function onChange(event: Event) {
         {{ player.name }}<template v-if="otherCharacterFor(player.id)"> (currently {{ otherCharacterFor(player.id)?.name }})</template>
       </option>
     </select>
-    <p v-if="!OBR.isAvailable" class="text-xs text-stone-400">Linking needs Owlbear Rodeo to see who's in the room.</p>
-    <p v-else-if="party.length === 0" class="text-xs text-stone-400">
+    <p v-if="!OBR.isAvailable" class="text-xs text-faint">Linking needs Owlbear Rodeo to see who's in the room.</p>
+    <p v-else-if="party.length === 0" class="text-xs text-faint">
       Nobody else is in the room right now - players show up here once they've joined.
     </p>
   </div>
