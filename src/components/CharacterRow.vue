@@ -8,6 +8,8 @@ const props = defineProps<{
   showSpawnEncounter?: boolean
   // Waiting for its map click - exists in the list but has no token yet.
   awaitingPlacement?: boolean
+  // Small muted tag after the name, e.g. "not linked".
+  note?: string
 }>()
 const emit = defineEmits<{
   view: []
@@ -36,6 +38,7 @@ const emit = defineEmits<{
       </div>
       <span class="min-w-0 flex-1 truncate">
         {{ character.name }}<span v-if="isTemplate" class="ml-1 text-xs text-stone-400">(template)</span
+        ><span v-if="note" class="ml-1 text-xs text-stone-400">({{ note }})</span
         ><span v-if="awaitingPlacement" class="ml-1 text-xs italic">(click map to place)</span>
       </span>
       <span class="shrink-0 text-xs text-stone-400">{{ character.currentHp }}/{{ character.maxHp }} HP</span>

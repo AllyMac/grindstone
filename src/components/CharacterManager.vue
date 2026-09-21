@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import OBR from '@owlbear-rodeo/sdk'
-import { computed, ref } from 'vue'
+import { imagePickerMessage } from '../lib/obr/pickerError'
+import { computed, ref, watch } from 'vue'
 import { beginPlacement, beginRepeatedPlacement, unplacedStatBlockId } from '../lib/obr/placementTool'
+import { canEditCharacter } from '../lib/permissions'
 import { useCharactersStore } from '../stores/characters'
 import type { NpcStatBlock, PlayerCharacter } from '../types/character'
 import CampaignPanel from './CampaignPanel.vue'
 import CharacterForm, { type CharacterFormValues } from './CharacterForm.vue'
+import CharacterPicker from './CharacterPicker.vue'
 import CharacterRow from './CharacterRow.vue'
 import CharacterSheet from './CharacterSheet.vue'
+import OwnerLink from './OwnerLink.vue'
 
-const props = defineProps<{ isGm: boolean }>()
+const props = defineProps<{ isGm: boolean; playerId?: string }>()
 
 const store = useCharactersStore()
 
@@ -22,6 +26,7 @@ type Mode =
   | { kind: 'edit'; id: string }
   | { kind: 'view'; id: string }
   | { kind: 'campaign' }
+  | { kind: 'choose' }
 const mode = ref<Mode>({ kind: 'list' })
 const formError = ref<string>()
 
@@ -51,8 +56,54 @@ function isNpc(character: PlayerCharacter | NpcStatBlock): character is NpcStatB
   return 'isTemplate' in character
 }
 
-const editingCharacter = computed(() => (mode.value.kind === 'edit' ? findCharacter(mode.value.id) : undefined))
-const viewingCharacter = computed(() => (mode.value.kind === 'view' ? findCharacter(mode.value.id) : undefined))
+// A player's whole interface is their own character sheet - no roster,
+// party list or NPCs. So what's shown is derived: the GM sees whatever
+// `mode` says, a player is pinned to their sheet, its edit form, or the
+// picker for claiming/switching/creating a character.
+const ownCharacter = computed(() =>
+  props.playerId ? store.players.find((p) => p.ownerId === props.playerId) : undefined,
+)
+const unclaimed = computed(() => store.players.filter((p) => !p.ownerId))
+
+const view = computed<Mode>(() => {
+  if (props.isGm) return mode.value
+  const m = mode.value
+  if (m.kind === 'create') return m
+  const own = ownCharacter.value
+  if (!own || m.kind === 'choose') return { kind: 'choose' }
+  return m.kind === 'edit' ? { kind: 'edit', id: own.id } : { kind: 'view', id: own.id }
+})
+
+// Players are trusted to link themselves. If the name they joined the room
+// with matches an unclaimed character, claim it for them - once per load,
+// so it never fights a deliberate switch.
+let autoMatched = false
+watch(
+  () => [props.isGm, props.playerId, store.ready, store.players] as const,
+  async ([isGm, playerId, ready]) => {
+    if (autoMatched || isGm || !playerId || !ready || !OBR.isAvailable) return
+    autoMatched = true
+    if (ownCharacter.value) return
+    const name = (await OBR.player.getName()).trim().toLowerCase()
+    if (!name) return
+    const match = unclaimed.value.find((p) => p.name.trim().toLowerCase() === name)
+    if (match) await store.assignOwner(match.id, playerId)
+  },
+  { immediate: true },
+)
+
+function claim(id: string) {
+  if (!props.playerId) return
+  void store.assignOwner(id, props.playerId)
+  mode.value = { kind: 'list' }
+}
+
+function canEdit(character: PlayerCharacter | NpcStatBlock) {
+  return canEditCharacter(character, { isGm: props.isGm, playerId: props.playerId })
+}
+
+const editingCharacter = computed(() => (view.value.kind === 'edit' ? findCharacter(view.value.id) : undefined))
+const viewingCharacter = computed(() => (view.value.kind === 'view' ? findCharacter(view.value.id) : undefined))
 
 function toFormValues(character: PlayerCharacter | NpcStatBlock): CharacterFormValues {
   return {
@@ -67,9 +118,10 @@ function toFormValues(character: PlayerCharacter | NpcStatBlock): CharacterFormV
 }
 
 function handleSubmit(values: CharacterFormValues) {
-  const excludeId = mode.value.kind === 'edit' ? mode.value.id : undefined
+  const current = view.value
+  const excludeId = current.kind === 'edit' ? current.id : undefined
   if (store.nameConflict(values.name, excludeId)) {
-    formError.value = `"${values.name}" is already in use by another player or NPC.`
+    formError.value = `"${values.name}" is already in use by another PC or NPC.`
     return
   }
   formError.value = undefined
@@ -78,17 +130,18 @@ function handleSubmit(values: CharacterFormValues) {
   // store already applies the change to local state synchronously, so
   // waiting here just leaves the form open (and inviting a double
   // submit) for as long as the network write takes.
-  if (mode.value.kind === 'create') {
+  if (current.kind === 'create') {
     if (activeTab.value === 'players') {
-      void store.createPlayer(values)
+      // A player creating a character is creating their own.
+      void store.createPlayer(values, props.isGm ? undefined : props.playerId)
     } else {
       void store.createNpc(values)
     }
-  } else if (mode.value.kind === 'edit') {
+  } else if (current.kind === 'edit') {
     if (activeTab.value === 'players') {
-      void store.updatePlayer(mode.value.id, values)
+      void store.updatePlayer(current.id, values)
     } else {
-      void store.updateNpc(mode.value.id, values)
+      void store.updateNpc(current.id, values)
     }
   }
   mode.value = { kind: 'list' }
@@ -153,6 +206,7 @@ async function handleSpawnAndPlace(template: NpcStatBlock) {
 }
 
 async function handleChangeImage(character: PlayerCharacter | NpcStatBlock) {
+  if (!canEdit(character)) return
   if (!OBR.isAvailable) {
     alert("Token images come from Owlbear's asset library, which isn't available outside Owlbear Rodeo.")
     return
@@ -168,11 +222,12 @@ async function handleChangeImage(character: PlayerCharacter | NpcStatBlock) {
     }
   } catch (err) {
     console.error('Grindstone: failed to change token image', err)
-    alert('Could not open the image picker.')
+    alert(imagePickerMessage(err))
   }
 }
 
 function showCharacter(kind: 'players' | 'npcs', id: string) {
+  if (!props.isGm) return
   activeTab.value = kind
   mode.value = { kind: 'view', id }
 }
@@ -182,14 +237,14 @@ defineExpose({ showCharacter })
 
 <template>
   <div class="flex flex-col gap-3 p-3">
-    <div class="flex rounded-md bg-stone-100 p-1 text-sm">
+    <div v-if="props.isGm" class="flex rounded-md bg-stone-100 p-1 text-sm">
       <button
         type="button"
         class="flex-1 rounded px-2 py-1 font-medium"
         :class="activeTab === 'players' ? 'bg-white shadow-sm' : 'text-stone-500'"
         @click="activeTab = 'players'; mode = { kind: 'list' }"
       >
-        Players
+        PCs
       </button>
       <button
         type="button"
@@ -201,9 +256,9 @@ defineExpose({ showCharacter })
       </button>
     </div>
 
-    <template v-if="mode.kind === 'create' || mode.kind === 'edit'">
+    <template v-if="view.kind === 'create' || view.kind === 'edit'">
       <h2 class="text-sm font-semibold text-stone-700">
-        {{ mode.kind === 'create' ? 'New' : 'Edit' }} {{ activeTab === 'players' ? 'player' : 'NPC' }}
+        {{ view.kind === 'create' ? 'New' : 'Edit' }} {{ activeTab === 'players' ? 'PC' : 'NPC' }}
       </h2>
       <CharacterForm
         :kind="activeTab === 'players' ? 'player' : 'npc'"
@@ -214,16 +269,25 @@ defineExpose({ showCharacter })
       />
     </template>
 
-    <CampaignPanel v-else-if="mode.kind === 'campaign'" @close="mode = { kind: 'list' }" />
+    <CampaignPanel v-else-if="view.kind === 'campaign'" @close="mode = { kind: 'list' }" />
 
-    <template v-else-if="mode.kind === 'view' && viewingCharacter">
+    <template v-else-if="view.kind === 'view' && viewingCharacter">
       <div class="flex items-center justify-between">
-        <button type="button" class="text-sm text-stone-500 hover:underline" @click="mode = { kind: 'list' }">← Back</button>
-        <div class="flex gap-2" v-if="props.isGm">
-          <button type="button" class="text-sm text-stone-600 hover:underline" @click="openEdit(viewingCharacter!.id)">
+        <button v-if="props.isGm" type="button" class="text-sm text-stone-500 hover:underline" @click="mode = { kind: 'list' }">← Back</button>
+        <button v-else type="button" class="text-sm text-stone-500 hover:underline" @click="mode = { kind: 'choose' }">
+          Switch PC
+        </button>
+        <div class="flex gap-2">
+          <button
+            v-if="canEdit(viewingCharacter)"
+            type="button"
+            class="text-sm text-stone-600 hover:underline"
+            @click="openEdit(viewingCharacter!.id)"
+          >
             Edit
           </button>
           <button
+            v-if="props.isGm"
             type="button"
             class="text-sm text-red-600 hover:underline"
             @click="handleDelete(viewingCharacter!.id, activeTab)"
@@ -235,7 +299,7 @@ defineExpose({ showCharacter })
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <button
-            v-if="props.isGm"
+            v-if="canEdit(viewingCharacter)"
             type="button"
             title="Change image"
             class="group relative h-10 w-10 shrink-0 rounded-full"
@@ -285,10 +349,20 @@ defineExpose({ showCharacter })
       </div>
       <CharacterSheet
         :character="viewingCharacter"
-        :editable-hp="props.isGm"
+        :editable-hp="canEdit(viewingCharacter)"
         @update-hp="(hp) => handleUpdateHp(viewingCharacter!.id, activeTab, hp)"
       />
+      <OwnerLink v-if="props.isGm && activeTab === 'players'" :character="viewingCharacter as PlayerCharacter" />
     </template>
+
+    <CharacterPicker
+      v-else-if="view.kind === 'choose'"
+      :unclaimed="unclaimed"
+      :can-cancel="!!ownCharacter"
+      @pick="claim"
+      @create="openCreate"
+      @cancel="mode = { kind: 'list' }"
+    />
 
     <template v-else>
       <div class="flex gap-2">
@@ -318,11 +392,12 @@ defineExpose({ showCharacter })
       </div>
 
       <template v-if="activeTab === 'players'">
-        <p v-if="filteredPlayers.length === 0" class="text-sm text-stone-400">No players yet.</p>
+        <p v-if="filteredPlayers.length === 0" class="text-sm text-stone-400">No PCs yet.</p>
         <ul class="flex flex-col gap-1">
           <li v-for="player in filteredPlayers" :key="player.id">
             <CharacterRow
               :character="player"
+              :note="player.ownerId ? undefined : 'not linked'"
               show-place
               @view="mode = { kind: 'view', id: player.id }"
               @place="handlePlace(player)"

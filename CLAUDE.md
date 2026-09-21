@@ -63,12 +63,17 @@ the room via the SDK:
   giant blob, so a single addition doesn't require rewriting the whole
   library on every write:
   ```
-  'grindstone/players': PlayerCharacter[]
-  'grindstone/npcs':    NpcStatBlock[]
+  'grindstone/p/<id>':  PlayerCharacter   // one key per player
+  'grindstone/e/<id>':  NpcStatBlock      // one key per active encounter copy
+  'grindstone/npcs':    NpcStatBlock[]    // templates + named NPCs (GM-only writes)
   'grindstone/spells':  Spell[]   // the Spellbook
   'grindstone/weapons': Weapon[]  // the Armory
   ```
-  Subscribe to `OBR.room.onMetadataChange()` per key so additions show up
+  Players and encounter copies get their own key because several people
+  save at once (a shared list would let the later write erase the
+  earlier one); saves write only the keys that changed - see
+  `src/lib/obr/roomCharacters.ts`. Older rooms are migrated by the GM's
+  client on load. Subscribe to `OBR.room.onMetadataChange()` per key so additions show up
   live for connected players without a refresh. Local IndexedDB is used as
   an offline cache/working copy, not the source of truth — room metadata
   is authoritative. Room metadata has an undocumented size limit; at the
@@ -81,9 +86,11 @@ the room via the SDK:
     involved at all (that's an NPC-only concern — see below). GM has
     create/edit rights; a player can edit their own entry once linked via
     `ownerId` (Phase 2).
-  - **NPCs**: GM has create/edit rights; players get a read-only
-    browse/place UI. See "One character sheet, no separate instances" for
-    how templates vs disposable encounter copies work within this list.
+  - **NPCs**: GM only - players don't see the NPC roster, encounter or
+    stat blocks at all (monster numbers stay secret; the health bars on
+    tokens are the only thing the table sees). See "One character sheet,
+    no separate instances" for how templates vs disposable encounter
+    copies work within this list.
   - **Spellbook**: GM curates a shared `Spell[]` catalog. Players browse
     it and add entries to their own character's `spellsKnown: string[]`
     rather than duplicating the spell definition itself.
@@ -393,10 +400,28 @@ into earlier phases.
 ### Phase 2 — Player/DM permissions
 - `ownerId` on player-owned `PlayerCharacter` entries/tokens
 - GM-only UI to assign a `PlayerCharacter` to a connected player, sourced
-  from `OBR.party.getPlayers()`
+  from `OBR.party.getPlayers()` (so only players currently in the room can
+  be picked; a player has one character, linking moves them off any other)
 - Permission gate: GM edits everything; a player only edits where
   `metadata.ownerId === OBR.player.id`. Soft/UI-level only — not real
   security, that's fine for this use case.
+- **Views**: the GM sees the full manager. A player sees *only their own
+  character sheet* (edit, HP, token image, place) - no roster, party list
+  or NPCs.
+- **Players link themselves** (trusted table): an unlinked player gets a
+  picker of unclaimed characters plus "Create a new character" (which
+  links automatically); a linked player can "Switch character" (the old
+  one becomes unclaimed). On first load, if the name they joined with
+  matches an unclaimed character (case-insensitive), it's linked for
+  them. The GM's "Played by" dropdown remains as an override.
+- HP bars are redrawn by the **GM's client only**, watching HP changes
+  from any source - a player's client may not be allowed to write scene
+  items, and several clients rewriting the same bars would race.
+- **Unverified (test with a second browser as a player)**: that a player's
+  client can write room metadata at all (the SDK's permission list has no
+  entry for it), and that `OBR.player.id` is stable across a player's
+  sessions. If room-metadata writes are refused for players, their edits
+  need to be relayed to the GM's client over `OBR.broadcast` instead.
 
 ### Phase 3 — Armory, weapon attacks + dice resolution
 - Shared `Weapon[]` Armory on room metadata, GM-authored, live-synced to

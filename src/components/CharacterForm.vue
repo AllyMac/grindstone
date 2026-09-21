@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import OBR from '@owlbear-rodeo/sdk'
+import { imagePickerMessage } from '../lib/obr/pickerError'
 import { reactive } from 'vue'
 import type { AbilityScores, TokenImage } from '../types/character'
 import AbilityScoreGrid from './AbilityScoreGrid.vue'
@@ -47,7 +48,7 @@ async function chooseTokenImage() {
     if (picked) form.tokenImage = { image: picked.image, grid: picked.grid }
   } catch (err) {
     console.error('Grindstone: failed to choose token image', err)
-    alert('Could not open the image picker.')
+    alert(imagePickerMessage(err))
   }
 }
 

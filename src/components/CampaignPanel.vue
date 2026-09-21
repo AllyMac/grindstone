@@ -30,7 +30,7 @@ function exportCampaign() {
   const data = buildCampaignExport(store.players, store.npcs)
   const date = new Date().toISOString().slice(0, 10)
   downloadJson(`grindstone-campaign-${date}.json`, data)
-  notice.value = `Exported ${data.players.length} player${data.players.length === 1 ? '' : 's'} and ${data.npcs.length} NPC${data.npcs.length === 1 ? '' : 's'} (encounter copies aren't included).`
+  notice.value = `Exported ${data.players.length} PC${data.players.length === 1 ? '' : 's'} and ${data.npcs.length} NPC${data.npcs.length === 1 ? '' : 's'} (encounter copies aren't included).`
 }
 
 async function onFile(event: Event) {
@@ -60,7 +60,7 @@ async function onFile(event: Event) {
 
 async function finish(plan: ImportPlan, choices: ImportChoice[]) {
   const result = applyImport(store.players, store.npcs, plan, choices)
-  await store.importCharacters(result.players, result.npcs, result.overwrittenIds)
+  await store.importCharacters(result.players, result.npcs)
 
   const c = result.counts
   const lines = [
@@ -112,7 +112,7 @@ function describe(c: ImportConflict['existing']) {
       <div class="flex flex-col gap-1 rounded-md border border-stone-200 p-3 text-sm">
         <h3 class="font-medium">Export</h3>
         <p class="text-xs text-stone-500">
-          Saves every player and NPC to a campaign.json file - a backup, or a way to move to another room.
+          Saves every PC and NPC to a campaign.json file - a backup, or a way to move to another room.
         </p>
         <button
           type="button"
@@ -154,7 +154,7 @@ function describe(c: ImportConflict['existing']) {
     <template v-else-if="current">
       <div class="flex items-center justify-between text-xs text-stone-500">
         <span>Conflict {{ stage.index + 1 }} of {{ stage.plan.conflicts.length }}</span>
-        <span class="uppercase">{{ current.kind }}</span>
+        <span class="uppercase">{{ current.kind === 'player' ? 'PC' : current.kind }}</span>
       </div>
 
       <p class="text-sm">

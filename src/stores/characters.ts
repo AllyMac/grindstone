@@ -2,13 +2,15 @@ import OBR from '@owlbear-rodeo/sdk'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { db, replaceTable } from '../lib/db'
-import { syncHpIndicator } from '../lib/obr/hpIndicators'
-import { getRoomList, onRoomListChange, setRoomList } from '../lib/obr/roomList'
+import {
+  diffCharacters,
+  getRoomCharacters,
+  migrateLegacyLayout,
+  onRoomCharactersChange,
+  writeRoomPatch,
+} from '../lib/obr/roomCharacters'
 import { deleteTokensForStatBlockIds } from '../lib/obr/tokens'
 import type { AbilityScores, NpcStatBlock, PlayerCharacter, TokenImage } from '../types/character'
-
-const PLAYERS_KEY = 'grindstone/players'
-const NPCS_KEY = 'grindstone/npcs'
 
 export interface NewCharacterInput {
   name: string
@@ -24,8 +26,7 @@ export const useCharactersStore = defineStore('characters', () => {
   const npcs = ref<NpcStatBlock[]>([])
   const ready = ref(false)
 
-  let unsubPlayers: (() => void) | undefined
-  let unsubNpcs: (() => void) | undefined
+  let unsubscribe: (() => void) | undefined
 
   function applyPlayers(value: PlayerCharacter[]) {
     players.value = value
@@ -52,12 +53,9 @@ export const useCharactersStore = defineStore('characters', () => {
     await new Promise<void>((resolve) => OBR.onReady(() => resolve()))
 
     try {
-      const [roomPlayers, roomNpcs] = await Promise.all([
-        getRoomList<PlayerCharacter>(PLAYERS_KEY),
-        getRoomList<NpcStatBlock>(NPCS_KEY),
-      ])
-      applyPlayers(roomPlayers)
-      applyNpcs(roomNpcs)
+      const room = await getRoomCharacters()
+      applyPlayers(room.players)
+      applyNpcs(room.npcs)
     } catch (err) {
       // Leave the cached values in place rather than wiping the UI to
       // empty over a fetch failure - room metadata is still the source
@@ -67,13 +65,22 @@ export const useCharactersStore = defineStore('characters', () => {
     }
     ready.value = true
 
-    unsubPlayers = onRoomListChange<PlayerCharacter>(PLAYERS_KEY, applyPlayers)
-    unsubNpcs = onRoomListChange<NpcStatBlock>(NPCS_KEY, applyNpcs)
+    unsubscribe = onRoomCharactersChange((room) => {
+      applyPlayers(room.players)
+      applyNpcs(room.npcs)
+    })
+
+    // One-off move from the old shared lists to per-character keys. Only
+    // the GM's client does it, so two clients don't both rewrite them.
+    try {
+      if ((await OBR.player.getRole()) === 'GM') await migrateLegacyLayout()
+    } catch (err) {
+      console.error('Grindstone: failed to migrate room data to per-character keys', err)
+    }
   }
 
   function dispose() {
-    unsubPlayers?.()
-    unsubNpcs?.()
+    unsubscribe?.()
   }
 
   function formatError(err: unknown): string {
@@ -85,10 +92,16 @@ export const useCharactersStore = defineStore('characters', () => {
     }
   }
 
+  // Writes only the keys that changed (see roomCharacters.ts), so saving
+  // one sheet can't overwrite someone else's simultaneous edit to another.
   async function savePlayers(next: PlayerCharacter[]) {
+    const patch = diffCharacters(
+      { players: players.value, npcs: npcs.value },
+      { players: next, npcs: npcs.value },
+    )
     applyPlayers(next)
     try {
-      await setRoomList(PLAYERS_KEY, next)
+      await writeRoomPatch(patch)
     } catch (err) {
       console.error('Grindstone: failed to save players to room metadata', err)
       alert(`Failed to save to Owlbear Rodeo - your changes are only local for now and may not survive a refresh: ${formatError(err)}`)
@@ -96,9 +109,13 @@ export const useCharactersStore = defineStore('characters', () => {
   }
 
   async function saveNpcs(next: NpcStatBlock[]) {
+    const patch = diffCharacters(
+      { players: players.value, npcs: npcs.value },
+      { players: players.value, npcs: next },
+    )
     applyNpcs(next)
     try {
-      await setRoomList(NPCS_KEY, next)
+      await writeRoomPatch(patch)
     } catch (err) {
       console.error('Grindstone: failed to save NPCs to room metadata', err)
       alert(`Failed to save to Owlbear Rodeo - your changes are only local for now and may not survive a refresh: ${formatError(err)}`)
@@ -120,9 +137,19 @@ export const useCharactersStore = defineStore('characters', () => {
     }
   }
 
-  async function createPlayer(input: NewCharacterInput) {
+  // With an ownerId (a player making their own character) the new sheet is
+  // linked straight away, moving that player off any character they had.
+  async function createPlayer(input: NewCharacterInput, ownerId?: string) {
     const character: PlayerCharacter = baseCharacter(input)
-    await savePlayers([...players.value, character])
+    if (ownerId) character.ownerId = ownerId
+    const others = ownerId
+      ? players.value.map((p) => {
+          if (p.ownerId !== ownerId) return p
+          const { ownerId: _previous, ...rest } = p
+          return rest
+        })
+      : players.value
+    await savePlayers([...others, character])
     return character
   }
 
@@ -136,32 +163,29 @@ export const useCharactersStore = defineStore('characters', () => {
     return character
   }
 
+  // HP bars are not redrawn from here: with players editing their own
+  // HP, the change may originate on a client that isn't allowed to write
+  // scene items. App.vue's GM-side watcher redraws them from any HP
+  // change instead, wherever it came from.
   async function updatePlayer(id: string, patch: Partial<PlayerCharacter>) {
-    let updated: PlayerCharacter | undefined
-    await savePlayers(
-      players.value.map((p) => {
-        if (p.id !== id) return p
-        updated = { ...p, ...patch, id }
-        return updated
-      }),
-    )
-    if (updated && ('currentHp' in patch || 'maxHp' in patch)) {
-      void syncHpIndicator(id, updated.currentHp, updated.maxHp)
-    }
+    await savePlayers(players.value.map((p) => (p.id === id ? { ...p, ...patch, id } : p)))
   }
 
   async function updateNpc(id: string, patch: Partial<NpcStatBlock>) {
-    let updated: NpcStatBlock | undefined
-    await saveNpcs(
-      npcs.value.map((n) => {
-        if (n.id !== id) return n
-        updated = { ...n, ...patch, id }
-        return updated
+    await saveNpcs(npcs.value.map((n) => (n.id === id ? { ...n, ...patch, id } : n)))
+  }
+
+  // Links a character to a connected player (or unlinks with undefined).
+  // A player has one character, so linking moves them off any other one -
+  // done in a single write so there's never a moment with two.
+  async function assignOwner(characterId: string, ownerId: string | undefined) {
+    await savePlayers(
+      players.value.map((p) => {
+        const { ownerId: _previous, ...rest } = p
+        if (p.id === characterId) return ownerId ? { ...rest, ownerId } : rest
+        return ownerId && p.ownerId === ownerId ? rest : p
       }),
     )
-    if (updated && ('currentHp' in patch || 'maxHp' in patch)) {
-      void syncHpIndicator(id, updated.currentHp, updated.maxHp)
-    }
   }
 
   async function deletePlayer(id: string) {
@@ -210,15 +234,9 @@ export const useCharactersStore = defineStore('characters', () => {
 
   // Campaign import hands over the already-merged lists, so this is one
   // write per list rather than one per imported entry.
-  async function importCharacters(nextPlayers: PlayerCharacter[], nextNpcs: NpcStatBlock[], overwrittenIds: string[]) {
+  async function importCharacters(nextPlayers: PlayerCharacter[], nextNpcs: NpcStatBlock[]) {
     await savePlayers(nextPlayers)
     await saveNpcs(nextNpcs)
-    // An overwritten character may now have different HP than the bar on
-    // its token shows.
-    for (const id of overwrittenIds) {
-      const character = nextPlayers.find((p) => p.id === id) ?? nextNpcs.find((n) => n.id === id)
-      if (character) void syncHpIndicator(id, character.currentHp, character.maxHp)
-    }
   }
 
   // Players and non-copy NPCs (templates + named NPCs) share one namespace,
@@ -247,6 +265,7 @@ export const useCharactersStore = defineStore('characters', () => {
     spawnEncounterCopy,
     clearEncounter,
     importCharacters,
+    assignOwner,
     nameConflict,
   }
 })

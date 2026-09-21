@@ -245,7 +245,11 @@ export function applyImport(
     } else if (choice === 'overwrite' && conflict.canOverwrite) {
       // Keeps the *existing* id so any token already on the map stays
       // linked - for a same-id conflict that's the same id anyway.
-      const replacement = { ...conflict.imported, id: conflict.existing.id }
+      const replacement: Character = { ...conflict.imported, id: conflict.existing.id }
+      // The file never carries ownerId (see withoutOwner), so replacing
+      // the record would silently unlink the player from their character.
+      const linkedTo = (conflict.existing as PlayerCharacter).ownerId
+      if (conflict.kind === 'player' && linkedTo) (replacement as PlayerCharacter).ownerId = linkedTo
       const list: Character[] = conflict.kind === 'player' ? players : npcs
       const at = list.findIndex((c) => c.id === conflict.existing.id)
       if (at >= 0) list[at] = replacement
