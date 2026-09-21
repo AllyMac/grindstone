@@ -6,6 +6,8 @@ const props = defineProps<{
   isTemplate?: boolean
   showPlace?: boolean
   showSpawnEncounter?: boolean
+  // Waiting for its map click - exists in the list but has no token yet.
+  awaitingPlacement?: boolean
 }>()
 const emit = defineEmits<{
   view: []
@@ -15,7 +17,10 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex items-center gap-1 rounded-md border border-stone-200 px-2 py-1.5 text-sm hover:bg-stone-50">
+  <div
+    class="flex items-center gap-1 rounded-md border border-stone-200 px-2 py-1.5 text-sm hover:bg-stone-50"
+    :class="{ 'opacity-40': awaitingPlacement }"
+  >
     <button type="button" class="flex flex-1 items-center gap-2 text-left" @click="emit('view')">
       <img
         v-if="character.tokenImage"
@@ -30,7 +35,8 @@ const emit = defineEmits<{
         ?
       </div>
       <span class="min-w-0 flex-1 truncate">
-        {{ character.name }}<span v-if="isTemplate" class="ml-1 text-xs text-stone-400">(template)</span>
+        {{ character.name }}<span v-if="isTemplate" class="ml-1 text-xs text-stone-400">(template)</span
+        ><span v-if="awaitingPlacement" class="ml-1 text-xs italic">(click map to place)</span>
       </span>
       <span class="shrink-0 text-xs text-stone-400">{{ character.currentHp }}/{{ character.maxHp }} HP</span>
     </button>

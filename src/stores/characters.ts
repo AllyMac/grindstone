@@ -208,6 +208,19 @@ export const useCharactersStore = defineStore('characters', () => {
     await deleteTokensForStatBlockIds(encounterCopyIds)
   }
 
+  // Campaign import hands over the already-merged lists, so this is one
+  // write per list rather than one per imported entry.
+  async function importCharacters(nextPlayers: PlayerCharacter[], nextNpcs: NpcStatBlock[], overwrittenIds: string[]) {
+    await savePlayers(nextPlayers)
+    await saveNpcs(nextNpcs)
+    // An overwritten character may now have different HP than the bar on
+    // its token shows.
+    for (const id of overwrittenIds) {
+      const character = nextPlayers.find((p) => p.id === id) ?? nextNpcs.find((n) => n.id === id)
+      if (character) void syncHpIndicator(id, character.currentHp, character.maxHp)
+    }
+  }
+
   // Players and non-copy NPCs (templates + named NPCs) share one namespace,
   // so target lists and token placement never have to disambiguate two
   // "Aragorn"s. Encounter copies are exempt - nextEncounterName() already
@@ -233,6 +246,7 @@ export const useCharactersStore = defineStore('characters', () => {
     deleteNpc,
     spawnEncounterCopy,
     clearEncounter,
+    importCharacters,
     nameConflict,
   }
 })

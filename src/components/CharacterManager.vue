@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import OBR from '@owlbear-rodeo/sdk'
 import { computed, ref } from 'vue'
-import { beginPlacement, beginRepeatedPlacement } from '../lib/obr/placementTool'
+import { beginPlacement, beginRepeatedPlacement, unplacedStatBlockId } from '../lib/obr/placementTool'
 import { useCharactersStore } from '../stores/characters'
 import type { NpcStatBlock, PlayerCharacter } from '../types/character'
+import CampaignPanel from './CampaignPanel.vue'
 import CharacterForm, { type CharacterFormValues } from './CharacterForm.vue'
 import CharacterRow from './CharacterRow.vue'
 import CharacterSheet from './CharacterSheet.vue'
@@ -15,7 +16,12 @@ const store = useCharactersStore()
 const activeTab = ref<'players' | 'npcs'>('players')
 const search = ref('')
 
-type Mode = { kind: 'list' } | { kind: 'create' } | { kind: 'edit'; id: string } | { kind: 'view'; id: string }
+type Mode =
+  | { kind: 'list' }
+  | { kind: 'create' }
+  | { kind: 'edit'; id: string }
+  | { kind: 'view'; id: string }
+  | { kind: 'campaign' }
 const mode = ref<Mode>({ kind: 'list' })
 const formError = ref<string>()
 
@@ -134,11 +140,16 @@ async function handleSpawnAndPlace(template: NpcStatBlock) {
   // Stays armed after each click so the GM can drop a whole group (four
   // goblins = four clicks) without reopening the picker each time -
   // Escape or the Cancel banner ends the session.
-  await beginRepeatedPlacement(async () => {
-    const copy = await store.spawnEncounterCopy(template.id)
-    if (!copy?.tokenImage) return undefined
-    return { name: copy.name, statBlockId: copy.id, tokenImage: copy.tokenImage, currentHp: copy.currentHp, maxHp: copy.maxHp }
-  })
+  await beginRepeatedPlacement(
+    async () => {
+      const copy = await store.spawnEncounterCopy(template.id)
+      if (!copy?.tokenImage) return undefined
+      return { name: copy.name, statBlockId: copy.id, tokenImage: copy.tokenImage, currentHp: copy.currentHp, maxHp: copy.maxHp }
+    },
+    // The next copy is spawned ahead of its click, so ending the session
+    // leaves one that never got a token - remove it.
+    (id) => store.deleteNpc(id),
+  )
 }
 
 async function handleChangeImage(character: PlayerCharacter | NpcStatBlock) {
@@ -202,6 +213,8 @@ defineExpose({ showCharacter })
         @cancel="mode = { kind: 'list' }"
       />
     </template>
+
+    <CampaignPanel v-else-if="mode.kind === 'campaign'" @close="mode = { kind: 'list' }" />
 
     <template v-else-if="mode.kind === 'view' && viewingCharacter">
       <div class="flex items-center justify-between">
@@ -293,6 +306,15 @@ defineExpose({ showCharacter })
         >
           + New
         </button>
+        <button
+          v-if="props.isGm"
+          type="button"
+          class="rounded-md border border-stone-300 px-2 py-1 text-sm text-stone-600 hover:bg-stone-100"
+          title="Export or import campaign.json"
+          @click="mode = { kind: 'campaign' }"
+        >
+          Backup
+        </button>
       </div>
 
       <template v-if="activeTab === 'players'">
@@ -346,6 +368,7 @@ defineExpose({ showCharacter })
               <CharacterRow
                 :character="npc"
                 show-place
+                :awaiting-placement="npc.id === unplacedStatBlockId"
                 @view="mode = { kind: 'view', id: npc.id }"
                 @place="handlePlace(npc)"
               />

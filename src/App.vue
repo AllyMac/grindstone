@@ -2,6 +2,7 @@
 import OBR from '@owlbear-rodeo/sdk'
 import { onMounted, onUnmounted, ref } from 'vue'
 import CharacterManager from './components/CharacterManager.vue'
+import { reconcileHpIndicators } from './lib/obr/hpIndicators'
 import { cancelPlacement, placingCharacterName, placingRepeats } from './lib/obr/placementTool'
 import { onSelectedStatBlockChange } from './lib/obr/selection'
 import { useCharactersStore } from './stores/characters'
@@ -12,6 +13,17 @@ const isGm = ref(true)
 const manager = ref<InstanceType<typeof CharacterManager>>()
 
 let unsubSelection: (() => void) | undefined
+let unsubSceneReady: (() => void) | undefined
+
+// GM only: every connected client's popover runs this, and several of
+// them rewriting the same bars at once would just race each other.
+function reconcileBars() {
+  if (!isGm.value) return
+  void reconcileHpIndicators((id) => {
+    const character = store.players.find((p) => p.id === id) ?? store.npcs.find((n) => n.id === id)
+    return character && { currentHp: character.currentHp, maxHp: character.maxHp }
+  })
+}
 
 onMounted(async () => {
   await store.load()
@@ -20,6 +32,13 @@ onMounted(async () => {
     OBR.onReady(async () => {
       isGm.value = (await OBR.player.getRole()) === 'GM'
       connected.value = true
+
+      // Covers tokens placed before HP bars existed, and a scene that
+      // finishes loading (or is switched to) after the popover opened.
+      reconcileBars()
+      unsubSceneReady = OBR.scene.onReadyChange((ready) => {
+        if (ready) reconcileBars()
+      })
     })
 
     // Tapping a placed token is a shortcut to select its character in
@@ -39,6 +58,7 @@ onMounted(async () => {
 onUnmounted(() => {
   store.dispose()
   unsubSelection?.()
+  unsubSceneReady?.()
 })
 </script>
 

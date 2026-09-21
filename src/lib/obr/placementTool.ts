@@ -23,6 +23,10 @@ export const placingCharacterName = ref<string>()
 // stop button "Done" instead of "Cancel", since some may already be
 // placed and stopping isn't undoing them.
 export const placingRepeats = ref(false)
+// The pre-spawned copy currently waiting for its map click, so the list
+// can show it as not-yet-placed. Only set for repeated sessions - a
+// single placement's character already exists and isn't "pending".
+export const unplacedStatBlockId = ref<string>()
 
 interface PendingPlacement {
   name: string
@@ -39,8 +43,16 @@ interface PendingPlacement {
 // tokenImage, so the cursor/tool never needs re-registering mid-session.
 type Spawner = () => Promise<PendingPlacement | undefined>
 
+// The spawner creates each copy *before* its click (so the banner and
+// cursor can show it), which means whatever is pending when a session
+// ends without a click - Done, Escape, switching tools, a failed arm -
+// is a copy that never got a token. discard removes it again so it
+// doesn't linger in the active encounter.
+type Discarder = (statBlockId: string) => Promise<void>
+
 let pending: PendingPlacement | undefined
 let spawner: Spawner | undefined
+let discarder: Discarder | undefined
 let previousToolId: string | undefined
 let unsubToolChange: (() => void) | undefined
 
@@ -94,13 +106,26 @@ async function teardown() {
   }
 }
 
+// Bumped whenever a session ends, so an in-flight spawn can tell the
+// session it belonged to is already gone by the time it resolves.
+let sessionId = 0
+
 async function endSession() {
+  sessionId++
+  // Only a spawner session's pending entry is a pre-spawned copy nobody
+  // has clicked for yet - a single placement's pending entry is a real,
+  // pre-existing character and must never be discarded.
+  const unplacedId = spawner ? pending?.statBlockId : undefined
+  const discard = discarder
   pending = undefined
   spawner = undefined
+  discarder = undefined
   placingCharacterName.value = undefined
   placingRepeats.value = false
+  unplacedStatBlockId.value = undefined
   if (previousToolId) await OBR.tool.activateTool(previousToolId)
   await teardown()
+  if (unplacedId && discard) await discard(unplacedId)
 }
 
 async function register(cursorImageUrl: string) {
@@ -123,6 +148,9 @@ async function register(cursorImageUrl: string) {
     async onToolClick(_context, event) {
       if (!pending) return
       const placement = pending
+      const session = sessionId
+      const spawnNext = spawner
+      const discard = discarder
       try {
         await placeToken(placement, event.pointerPosition)
       } catch (err) {
@@ -132,15 +160,26 @@ async function register(cursorImageUrl: string) {
         return
       }
 
-      if (spawner) {
-        const next = await spawner()
+      // This one now has a token, so it's no longer "unplaced" - clear it
+      // before anything can end the session and discard it.
+      pending = undefined
+      unplacedStatBlockId.value = undefined
+
+      if (spawnNext) {
+        const next = await spawnNext()
+        if (next && session !== sessionId) {
+          // Done/Escape landed while the next copy was still being made.
+          if (discard) await discard(next.statBlockId)
+          return
+        }
         if (next) {
           pending = next
+          unplacedStatBlockId.value = next.statBlockId
           placingCharacterName.value = next.name
           return // stay armed for another click
         }
       }
-      await endSession()
+      if (session === sessionId) await endSession()
     },
     onKeyDown(_context, event) {
       if (event.key === 'Escape') void endSession()
@@ -158,9 +197,10 @@ async function register(cursorImageUrl: string) {
   })
 }
 
-async function armSession(initial: PendingPlacement, sessionSpawner?: Spawner) {
+async function armSession(initial: PendingPlacement, sessionSpawner?: Spawner, sessionDiscarder?: Discarder) {
   if (!OBR.isAvailable) {
     alert('Grindstone is not running inside Owlbear Rodeo, so there is no map to place on.')
+    if (sessionDiscarder) await sessionDiscarder(initial.statBlockId)
     return
   }
   if (pending) await endSession()
@@ -171,17 +211,22 @@ async function armSession(initial: PendingPlacement, sessionSpawner?: Spawner) {
     previousToolId = await OBR.tool.getActiveTool()
     pending = initial
     spawner = sessionSpawner
+    discarder = sessionDiscarder
+    unplacedStatBlockId.value = sessionSpawner ? initial.statBlockId : undefined
     placingCharacterName.value = initial.name
     placingRepeats.value = sessionSpawner !== undefined
     await OBR.tool.activateTool(TOOL_ID)
   } catch (err) {
     pending = undefined
     spawner = undefined
+    discarder = undefined
     placingCharacterName.value = undefined
     placingRepeats.value = false
+    unplacedStatBlockId.value = undefined
     console.error('Grindstone: failed to start placement', err)
     alert(`Could not start placement: ${formatError(err)}`)
     await teardown()
+    if (sessionDiscarder) await sessionDiscarder(initial.statBlockId)
   }
 }
 
@@ -208,6 +253,7 @@ export async function beginRepeatedPlacement(
   spawnNext: () => Promise<
     { name: string; statBlockId: string; tokenImage: TokenImage; currentHp: number; maxHp: number } | undefined
   >,
+  discardUnplaced: Discarder,
 ) {
   const plainSpawner: Spawner = async () => {
     const next = await spawnNext()
@@ -215,7 +261,7 @@ export async function beginRepeatedPlacement(
   }
   const first = await plainSpawner()
   if (!first) return
-  await armSession(first, plainSpawner)
+  await armSession(first, plainSpawner, discardUnplaced)
 }
 
 export async function cancelPlacement() {
